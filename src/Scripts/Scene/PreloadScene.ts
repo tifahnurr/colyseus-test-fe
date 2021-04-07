@@ -18,6 +18,5 @@ export default class PreloadScene extends Scene {
       frameHeight: 128
     });
     this.load.atlasXML('space', 'spacesheet.png', 'spacesheet.xml');
-    
   }
 } 

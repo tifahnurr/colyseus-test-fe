@@ -1,11 +1,12 @@
 import { Client, Room } from 'colyseus.js';
 import { Vector } from 'matter';
-import { GameObjects, Input, Scene, Types } from 'phaser';
+import { GameObjects, Input, Scene, Scenes, Types } from 'phaser';
+import { BattleSchema } from '../Schema/BattleSchema';
 
 export default class GameScene extends Scene {
   client!: Client;
 
-  room?: Room;
+  battleRoom?: Room;
 
   sessionId?: string;
 
@@ -13,28 +14,39 @@ export default class GameScene extends Scene {
 
   player?: Types.Physics.Arcade.ImageWithDynamicBody;
 
-  players: Map<number, GameObjects.Image>;
+  players!: Map<number, GameObjects.Image>;
 
   bound = Math.pow(2, 12);
 
   cursors!: Types.Input.Keyboard.CursorKeys;
 
+  gameHUD?: Scene;
+
   constructor() {
     super('GameScene');
-
-    this.players = new Map();
   }
 
   init() {
+    // reference need to be reset, 
+    // cause it's still hangging on when you destory it.
+    this.resetReferences();
+
+    // add fake player id
     this.playerId = (Math.floor(Math.random() * 1e5) + Date.now()) % 1e5;
+    
+    // setup colyseus client
     this.client = new Client(`ws://${window.location.hostname}:2567`);
+    
+    // setups world bounds
     this.cameras.main.setBounds(0, 0, this.bound, this.bound);
     this.physics.world.setBounds(0, 0, this.bound, this.bound);
 
+    // setup cursors input;
     this.cursors = this.input.keyboard.createCursorKeys();
   }
 
   create() {
+    // setup startfield background
     const background = this.add.tileSprite(
       0,
       0,
@@ -44,17 +56,25 @@ export default class GameScene extends Scene {
     );
     background.setOrigin(0, 0);
 
+    // connect to the colyseus room
     this.connect();
+
+    this.setupRestartEvent();
   }
 
   update() {
+    
     this.updatePlayersPosition(0.333);
-    if (!this.player) {
+    
+    // player is undefined or not active
+    if (!this.player?.active) {
       return;
     }
 
+    // stop player
     this.player.setVelocity(0);
 
+    // move player by cursors
     if (this.cursors.left.isDown) {
       this.player.setAngle(-90).setVelocityX(-200);
     } else if (this.cursors.right.isDown) {
@@ -67,20 +87,44 @@ export default class GameScene extends Scene {
       this.player.setAngle(-180).setVelocityY(200);
     }
 
+    // send player transform each tick
     this.sendMyPlayerTransform();
+  }
+
+  resetReferences() {
+    this.battleRoom = undefined;
+    this.player = undefined;
+    this.players = new Map();
+  }
+
+  setupRestartEvent() {
+    this.input.keyboard.removeListener('keup-R', this.restartScene, this);
+    this.input.keyboard.once('keyup-R', this.restartScene, this);
+  }
+
+  restartScene(){
+    this.goToNextScene('GameScene');
+  }
+
+  goToNextScene(scene: string, data?: object) {
+    this.battleRoom?.leave();
+    this.player?.destroy();
+    this.players = new Map();
+    this.resetReferences();
+    this.scene.start(scene, data)
   }
 
   async connect() {
 
     try {
-      this.room = await this.client.joinOrCreate('battle_room');
+      this.battleRoom = await this.client.joinOrCreate('battle_room');
     } catch (error) {
       throw new Error('failed to connect server');
     }
     
-    this.setupRoomEvents();
+    this.setupBattleRoomEvents();
     this.setupSpawnButton();
-    this.sessionId = this.room.sessionId;
+    this.sessionId = this.battleRoom.sessionId;
   }
 
   setupSpawnButton() {
@@ -96,25 +140,29 @@ export default class GameScene extends Scene {
     rectangle
     .setInteractive()
     .on(Input.Events.POINTER_DOWN, () => {
+      if(!this.battleRoom) { return; }
       this.spawnMyPlayer();
       button.destroy();
     })
   }
 
-  setupRoomEvents() {
-    if (!this.room) {
+  setupBattleRoomEvents() {
+    if (!this.battleRoom) {
       return;
     }
 
-    this.room.onMessage('spawn', () => {
+    // register spawn listener
+    this.battleRoom.onMessage('spawn', () => {
       this.spawnMyPlayer();
     });
 
-    this.room.onMessage('leave', (id: number) => {
+    // register despawn listener
+    this.battleRoom.onMessage('leave', (id: number) => {
       this.despawnPlayer(id);
     });
 
-    this.room.onStateChange((state) => {
+    // on state have a change not a whole object
+    this.battleRoom.onStateChange((state: BattleSchema) => {
       state.players.forEach((p: any) => {
         const { x, y } = p.position;
         p.isSpawned && this.handlePlayer(p.id, x, y, p.angle);
@@ -128,19 +176,23 @@ export default class GameScene extends Scene {
       x: Math.floor(Math.random() * this.bound),
       y: Math.floor(Math.random() * this.bound),
     };
-    this.room?.send('spawn', data);
+
+    // check on the server side
+    this.battleRoom?.send('spawn', data);
   }
 
   sendMyPlayerTransform() {
-    if (!this.player || !this.room) {
+    if (!this.player?.active || !this.battleRoom) {
       return;
     }
+
     const data = {
       x: this.player.x,
       y: this.player.y,
       angle: this.player.angle,
     };
 
+    // get metadata lastmove from player
     const lastMove = this.player.getData('lastMove');
     
     if (
@@ -149,7 +201,7 @@ export default class GameScene extends Scene {
       lastMove.y !== data.y ||
       lastMove.angle !== data.angle
     ) {
-      this.room.send('move', data);
+      this.battleRoom.send('move', data);
       this.player.setData('lastMove', data);
     }
   }
@@ -174,6 +226,7 @@ export default class GameScene extends Scene {
       player = this.physics.add.image(x, y, 'space', 'playerShip1_red.png');
       this.player = player;
       this.setupPlayerController();
+      this.setupPlayerHUD();
     } else {
       player = this.add.image(x, y, 'space', 'playerShip1_red.png');
     }
@@ -192,9 +245,9 @@ export default class GameScene extends Scene {
   }
 
   updatePlayersPosition(percentage: number) {
-    this.players.forEach((player) => {
+    this.players?.forEach((player) => {
       const id = player.getData('id') as number;
-      if (id === this.playerId) {
+      if (id === this.playerId || !player) {
         return; // skip check
       }
 
@@ -202,7 +255,8 @@ export default class GameScene extends Scene {
         x: number;
         y: number;
         angle: number;
-      };
+      } || {};
+
       const { x, y } = player;
       player.setPosition(
         Phaser.Math.Linear(x, nX, percentage),
@@ -213,11 +267,16 @@ export default class GameScene extends Scene {
   }
 
   setupPlayerController() {
-    if (!this.player || !this.room) {
+    if (!this.player || !this.battleRoom) {
       return;
     }
-
+    
     this.cameras.main.startFollow(this.player, true, 0.09, 0.09);
-    // this.player.setVelocity(20);
+  }
+
+  setupPlayerHUD() {
+    // use paralel scene for the HUD
+    this.scene.launch('GameHUD', {player: this.player, scene: this});
+    this.gameHUD = this.scene.get('GameHUD');
   }
 }

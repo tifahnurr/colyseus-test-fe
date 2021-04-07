@@ -1,4 +1,5 @@
 import { Types, AUTO, Scale } from 'phaser';
+import GameHUD from '../HUD/GameHUD';
 import GameScene from '../Scene/GameScene';
 import PreloadScene from '../Scene/PreloadScene';
 
@@ -18,8 +19,8 @@ const config: PhaserConfig = {
       debug: false
     }
   },
-  backgroundColor: '#493a52',
-  scene: [PreloadScene, GameScene]
+  backgroundColor: '#101010',
+  scene: [PreloadScene, GameScene, GameHUD]
 };
 
 export default config;
