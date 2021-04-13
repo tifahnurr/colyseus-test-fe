@@ -31,12 +31,12 @@ export default class GameScene extends Scene {
     // cause it's still hangging on when you destory it.
     this.resetReferences();
 
-    // add fake player id
+    // add fake player id, that maybe conflict with other cause its psudo
     this.playerId = (Math.floor(Math.random() * 1e5) + Date.now()) % 1e5;
-    
+
     // setup colyseus client
     this.client = new Client(`ws://${window.location.hostname}:2567`);
-    
+
     // setups world bounds
     this.cameras.main.setBounds(0, 0, this.bound, this.bound);
     this.physics.world.setBounds(0, 0, this.bound, this.bound);
@@ -63,9 +63,9 @@ export default class GameScene extends Scene {
   }
 
   update() {
-    
+
     this.updatePlayersPosition(0.333);
-    
+
     // player is undefined or not active
     if (!this.player?.active) {
       return;
@@ -102,7 +102,7 @@ export default class GameScene extends Scene {
     this.input.keyboard.once('keyup-R', this.restartScene, this);
   }
 
-  restartScene(){
+  restartScene() {
     this.goToNextScene('GameScene');
   }
 
@@ -121,7 +121,6 @@ export default class GameScene extends Scene {
     } catch (error) {
       throw new Error('failed to connect server');
     }
-    
     this.setupBattleRoomEvents();
     this.setupSpawnButton();
     this.sessionId = this.battleRoom.sessionId;
@@ -133,28 +132,23 @@ export default class GameScene extends Scene {
     const rectangle = this.add.rectangle(0, 0, 300, 150, 0x696969, 1);
     const spawnText = this.add.text(0, 0, 'START GAME', {
       fontSize: '32px',
-      wordWrap: {width: 200},
+      wordWrap: { width: 200 },
       align: 'center'
     }).setOrigin(0.5);
     const button = this.add.container(screenCenterX, screenCenterY, [rectangle, spawnText]);
     rectangle
-    .setInteractive()
-    .on(Input.Events.POINTER_DOWN, () => {
-      if(!this.battleRoom) { return; }
-      this.spawnMyPlayer();
-      button.destroy();
-    })
+      .setInteractive()
+      .on(Input.Events.POINTER_DOWN, () => {
+        if (!this.battleRoom) { return; }
+        this.spawnMyPlayer();
+        button.destroy();
+      })
   }
 
   setupBattleRoomEvents() {
     if (!this.battleRoom) {
       return;
     }
-
-    // register spawn listener
-    this.battleRoom.onMessage('spawn', () => {
-      this.spawnMyPlayer();
-    });
 
     // register despawn listener
     this.battleRoom.onMessage('leave', (id: number) => {
@@ -163,7 +157,7 @@ export default class GameScene extends Scene {
 
     // on state have a change not a whole object
     this.battleRoom.onStateChange((state: BattleSchema) => {
-      state.players.forEach((p: any) => {
+      state.players.forEach((p) => {
         const { x, y } = p.position;
         p.isSpawned && this.handlePlayer(p.id, x, y, p.angle);
       });
@@ -194,15 +188,19 @@ export default class GameScene extends Scene {
 
     // get metadata lastmove from player
     const lastMove = this.player.getData('lastMove');
-    
+
     if (
       !lastMove ||
       lastMove.x !== data.x ||
       lastMove.y !== data.y ||
       lastMove.angle !== data.angle
     ) {
-      this.battleRoom.send('move', data);
-      this.player.setData('lastMove', data);
+      try {
+        this.battleRoom.send('move', data);
+        this.player.setData('lastMove', data);
+      } catch (error) {
+        console.error(error);
+      }
     }
   }
 
@@ -220,8 +218,8 @@ export default class GameScene extends Scene {
 
       return;
     }
-    let player;
 
+    let player;
     if (id === this.playerId) {
       player = this.physics.add.image(x, y, 'space', 'playerShip1_red.png');
       this.player = player;
@@ -270,13 +268,13 @@ export default class GameScene extends Scene {
     if (!this.player || !this.battleRoom) {
       return;
     }
-    
+
     this.cameras.main.startFollow(this.player, true, 0.09, 0.09);
   }
 
   setupPlayerHUD() {
     // use paralel scene for the HUD
-    this.scene.launch('GameHUD', {player: this.player, scene: this});
+    this.scene.launch('GameHUD', { player: this.player, scene: this });
     this.gameHUD = this.scene.get('GameHUD');
   }
 }
