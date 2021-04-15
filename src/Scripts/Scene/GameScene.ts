@@ -32,7 +32,8 @@ export default class GameScene extends Scene {
     this.resetReferences();
 
     // add fake player id, that maybe conflict with other cause its psudo
-    this.playerId = (Math.floor(Math.random() * 1e5) + Date.now()) % 1e5;
+    // module by 65k because it is uint16 on the player schema
+    this.playerId = (Math.floor(Math.random() * 1e5) + Date.now()) % 65000;
 
     // setup colyseus client
     this.client = new Client(`ws://${window.location.hostname}:2567`);
@@ -151,7 +152,7 @@ export default class GameScene extends Scene {
     }
 
     // register despawn listener
-    this.battleRoom.onMessage('leave', (id: number) => {
+    this.battleRoom.onMessage('despawn', (id: number) => {
       this.despawnPlayer(id);
     });
 
