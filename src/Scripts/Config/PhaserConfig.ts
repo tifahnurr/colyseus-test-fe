@@ -16,11 +16,11 @@ const config: PhaserConfig = {
   physics: {
     default: 'arcade',
     arcade: {
-      debug: false
-    }
+      debug: false,
+    },
   },
   backgroundColor: '#101010',
-  scene: [PreloadScene, GameScene, GameHUD]
+  scene: [PreloadScene, GameScene, GameHUD],
 };
 
 export default config;

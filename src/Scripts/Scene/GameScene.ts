@@ -1,6 +1,6 @@
 import { Client, Room } from 'colyseus.js';
-import { Vector } from 'matter';
 import { GameObjects, Input, Scene, Scenes, Types } from 'phaser';
+import { SERVER_MSG } from '../Config/ServerMessages';
 import { BattleSchema } from '../Schema/BattleSchema';
 
 export default class GameScene extends Scene {
@@ -27,7 +27,7 @@ export default class GameScene extends Scene {
   }
 
   init() {
-    // reference need to be reset, 
+    // reference need to be reset,
     // cause it's still hangging on when you destory it.
     this.resetReferences();
 
@@ -64,7 +64,6 @@ export default class GameScene extends Scene {
   }
 
   update() {
-
     this.updatePlayersPosition(0.333);
 
     // player is undefined or not active
@@ -112,11 +111,10 @@ export default class GameScene extends Scene {
     this.player?.destroy();
     this.players = new Map();
     this.resetReferences();
-    this.scene.start(scene, data)
+    this.scene.start(scene, data);
   }
 
   async connect() {
-
     try {
       this.battleRoom = await this.client.joinOrCreate('battle_room');
     } catch (error) {
@@ -128,22 +126,29 @@ export default class GameScene extends Scene {
   }
 
   setupSpawnButton() {
-    const screenCenterX = this.cameras.main.worldView.x + this.cameras.main.width / 2;
-    const screenCenterY = this.cameras.main.worldView.y + this.cameras.main.height / 2;
+    const screenCenterX =
+      this.cameras.main.worldView.x + this.cameras.main.width / 2;
+    const screenCenterY =
+      this.cameras.main.worldView.y + this.cameras.main.height / 2;
     const rectangle = this.add.rectangle(0, 0, 300, 150, 0x696969, 1);
-    const spawnText = this.add.text(0, 0, 'START GAME', {
-      fontSize: '32px',
-      wordWrap: { width: 200 },
-      align: 'center'
-    }).setOrigin(0.5);
-    const button = this.add.container(screenCenterX, screenCenterY, [rectangle, spawnText]);
-    rectangle
-      .setInteractive()
-      .on(Input.Events.POINTER_DOWN, () => {
-        if (!this.battleRoom) { return; }
-        this.spawnMyPlayer();
-        button.destroy();
+    const spawnText = this.add
+      .text(0, 0, 'START GAME', {
+        fontSize: '32px',
+        wordWrap: { width: 200 },
+        align: 'center',
       })
+      .setOrigin(0.5);
+    const button = this.add.container(screenCenterX, screenCenterY, [
+      rectangle,
+      spawnText,
+    ]);
+    rectangle.setInteractive().on(Input.Events.POINTER_DOWN, () => {
+      if (!this.battleRoom) {
+        return;
+      }
+      this.spawnMyPlayer();
+      button.destroy();
+    });
   }
 
   setupBattleRoomEvents() {
@@ -151,8 +156,13 @@ export default class GameScene extends Scene {
       return;
     }
 
+    // ping pong handler
+    this.battleRoom.onMessage(SERVER_MSG.PING, (message) => {
+      this.battleRoom?.send(SERVER_MSG.PONG, message);
+    });
+
     // register despawn listener
-    this.battleRoom.onMessage('despawn', (id: number) => {
+    this.battleRoom.onMessage(SERVER_MSG.DESPAWN, (id: number) => {
       this.despawnPlayer(id);
     });
 
@@ -250,11 +260,12 @@ export default class GameScene extends Scene {
         return; // skip check
       }
 
-      const { x: nX, y: nY, angle: nAngle } = player.getData('transform') as {
-        x: number;
-        y: number;
-        angle: number;
-      } || {};
+      const { x: nX, y: nY, angle: nAngle } =
+        (player.getData('transform') as {
+          x: number;
+          y: number;
+          angle: number;
+        }) || {};
 
       const { x, y } = player;
       player.setPosition(

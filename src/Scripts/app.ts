@@ -1,5 +1,5 @@
-import PhaserConfig  from './Config/PhaserConfig';
-import { Game } from "phaser";
+import PhaserConfig from './Config/PhaserConfig';
+import { Game } from 'phaser';
 
 export class PhaserGame extends Game {}
 declare global {
