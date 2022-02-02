@@ -8,10 +8,9 @@
 import { Schema, type, ArraySchema, MapSchema, SetSchema, DataChange } from '@colyseus/schema';
 import { Vector2DSchema } from './Vector2DSchema'
 
-export class PlayerSchema extends Schema {
+export class StarSchema extends Schema {
     @type("boolean") public isSpawned!: boolean;
+    @type("boolean") public isDespawned!: boolean;
     @type("uint16") public id!: number;
-    @type("number") public angle!: number;
-    @type("number") public score!: number;
     @type(Vector2DSchema) public position: Vector2DSchema = new Vector2DSchema();
 }

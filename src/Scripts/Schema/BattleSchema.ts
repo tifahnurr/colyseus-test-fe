@@ -1,20 +1,15 @@
-//
+// 
 // THIS FILE HAS BEEN GENERATED AUTOMATICALLY
 // DO NOT CHANGE IT MANUALLY UNLESS YOU KNOW WHAT YOU'RE DOING
-//
-// GENERATED USING @colyseus/schema 1.0.16
-//
+// 
+// GENERATED USING @colyseus/schema 1.0.31
+// 
 
-import {
-  Schema,
-  type,
-  ArraySchema,
-  MapSchema,
-  DataChange,
-} from '@colyseus/schema';
-import { PlayerSchema } from './PlayerSchema';
+import { Schema, type, ArraySchema, MapSchema, SetSchema, DataChange } from '@colyseus/schema';
+import { PlayerSchema } from './PlayerSchema'
+import { StarSchema } from './StarSchema'
 
 export class BattleSchema extends Schema {
-  @type({ map: PlayerSchema })
-  public players: MapSchema<PlayerSchema> = new MapSchema<PlayerSchema>();
+    @type({ map: PlayerSchema }) public players: MapSchema<PlayerSchema> = new MapSchema<PlayerSchema>();
+    @type({ map: StarSchema }) public stars: MapSchema<StarSchema> = new MapSchema<StarSchema>();
 }
