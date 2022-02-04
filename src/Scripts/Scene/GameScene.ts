@@ -64,7 +64,7 @@ export default class GameScene extends Scene {
     this.playerId = (Math.floor(Math.random() * 1e5) + Date.now()) % 65000;
 
     // setup colyseus client
-    this.client = new Client(`ws://${ServerUrl}`);
+    this.client = new Client(`wss://${ServerUrl}`);
 
     // setups world bounds
     this.cameras.main.setBounds(0, 0, this.bound, this.bound);
@@ -195,7 +195,7 @@ export default class GameScene extends Scene {
   }
 
   async reconnect() {
-    this.client = new Client(`ws://${ServerUrl}`);
+    this.client = new Client(`wss://${ServerUrl}`);
     try {
       this.client.reconnect(String(this.battleRoom?.id), String(this.battleRoom?.sessionId)).then((room) => {
         this.battleRoom = room;
