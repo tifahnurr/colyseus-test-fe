@@ -32,6 +32,8 @@ export default class GameHUD extends Scene {
 
   hp!: HP;
 
+  lastUpdate!: number;
+
   init(data: { player: Types.Physics.Arcade.ImageWithDynamicBody, players: Map<number, GameObjects.Image>, currentRTT: RTT, hp: HP}) {
     this.player = data?.player;
     this.players = data?.players;
@@ -66,14 +68,18 @@ export default class GameHUD extends Scene {
     const hpPercent = this.add.rectangle(0, 0, hpBg.width, hpBg.height - 5, 0xadd8e6).setData('name', 'percent').setData('maxWidth', hpBg.width);
     const hpText = this.add.text(0, 0, '100%', {font: "16px Arial", color: "#000000", align: "center"}).setOrigin(0.5, 0.5).setData('name', 'text');
     this.healthPoint = this.add.container(screenCenterX, 750, [hpBg, hpPercent, hpText]);
+    this.lastUpdate = 0;
   }
 
   update() {
     this.updatePlayerCoordinate();
     this.updatePlayerScore();
+    this.updateHp();
+
+    if (Date.now() - this.lastUpdate < 3000) return;
+    this.lastUpdate = Date.now();
     this.updatePlayerRanking();
     this.updateRTT();
-    this.updateHp();
   }
 
   updatePlayerCoordinate() {
@@ -92,6 +98,7 @@ export default class GameHUD extends Scene {
     if (score !== data) {
       this.playerScore.setData('score', score);
       this.playerScore.setText(`Score: ${score}`);
+      this.updatePlayerRanking();
     }
   }
 
@@ -117,6 +124,8 @@ export default class GameHUD extends Scene {
   }
 
   updateHp() {
+    if (this.hp.amount === this.healthPoint.getData('hp')) return;
+    this.healthPoint.setData('hp', this.hp.amount);
     this.healthPoint.getAll().forEach((elmt: any) => {
       if (elmt.getData('name') === 'percent') {
         elmt.width = (this.hp.amount / 100) * elmt.getData('maxWidth');

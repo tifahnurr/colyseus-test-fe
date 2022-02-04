@@ -1,6 +1,9 @@
 import { Client, Room } from 'colyseus.js';
 import { GameObjects, Input, Scene, Scenes, Types } from 'phaser';
 import { SERVER_MSG } from '../Config/ServerMessages';
+import StarGroup from '../Object/StarGroup';
+
+import Lasers from '../Object/Lasers';
 import { BattleSchema } from '../Schema/BattleSchema';
 
 interface RTT {
@@ -25,15 +28,19 @@ export default class GameScene extends Scene {
 
   player?: Types.Physics.Arcade.ImageWithDynamicBody;
 
+  starGroup!: StarGroup;
+
   players!: Map<number, GameObjects.Image>;
 
-  stars!: Map<number, GameObjects.Image>;
+  lasers!: Lasers;
 
-  starGroup!: GameObjects.Group;
+  laserGroup!: GameObjects.Group;
 
   bound = Math.pow(2, 12);
 
   cursors!: Types.Input.Keyboard.CursorKeys;
+
+  spaceButton!: Input.Keyboard.Key;
 
   gameHUD?: Scene;
   
@@ -64,10 +71,13 @@ export default class GameScene extends Scene {
     // setup cursors input;
     this.cursors = this.input.keyboard.createCursorKeys();
 
+    this.spaceButton = this.input.keyboard.addKey('SPACE');
+
     this.currentRTT.lastPing = Date.now();
     this.currentRTT.currentRTT = 0;
 
-    this.starGroup = this.physics.add.group();
+    this.starGroup = new StarGroup(this);
+    this.lasers = new Lasers(this);
   }
 
   create() {
@@ -81,15 +91,17 @@ export default class GameScene extends Scene {
     );
     background.setOrigin(0, 0);
 
+
     // connect to the colyseus room
     this.connect();
 
     this.setupRestartEvent();
+    this.events.on('shootLaser', this.broadcastLaser, this);
   }
 
   update() {
     this.updatePlayersPosition(0.333);
-    this.updateStarStatus();
+    this.starGroup.updateStatus();
     // player is undefined or not active
     if (!this.player?.active) {
       return;
@@ -115,6 +127,15 @@ export default class GameScene extends Scene {
       this.player.y += Movement
     }
 
+    if (this.spaceButton.isDown) {
+      this.lasers.spawnCurrent(this.player);
+    }
+
+    // this.checkLaserOverlap();
+    if (this.lasers.getGroup().getFirstAlive()) {
+      this.checkLaserOverlap();
+    }
+    this.checkHp();
     // send player transform each tick
     this.sendMyPlayerTransform();
   }
@@ -124,7 +145,7 @@ export default class GameScene extends Scene {
     this.player = undefined;
     this.playerId = 0;
     this.players = new Map();
-    this.stars = new Map();
+    this.starGroup?.resetReferences();
     this.currentRTT = {
       currentRTT: 0,
       lastPing: 0
@@ -133,6 +154,7 @@ export default class GameScene extends Scene {
       amount: 100
     };
     this.time.removeAllEvents();
+    this.events.off ('shootLaser');
   }
 
   setupRestartEvent() {
@@ -148,7 +170,7 @@ export default class GameScene extends Scene {
     this.battleRoom?.leave();
     this.player?.destroy();
     this.players = new Map();
-    this.stars = new Map();
+    this.starGroup.resetReferences();
     this.resetReferences();
     this.scene.start(scene, data);
   }
@@ -168,6 +190,20 @@ export default class GameScene extends Scene {
         this.pingServer();
       }
     })
+  }
+
+  async reconnect() {
+    this.client = new Client(`ws://${window.location.hostname}:2567`);
+    try {
+      this.client.reconnect(String(this.battleRoom?.id), String(this.battleRoom?.sessionId)).then((room) => {
+        this.battleRoom = room;
+        this.starGroup.clear();
+        this.lasers.clear();
+        this.setupBattleRoomEvents();
+      })
+    } catch (e) {
+      console.log("cannot reconnect");
+    }
   }
 
   setupSpawnButton() {
@@ -221,17 +257,28 @@ export default class GameScene extends Scene {
 
       state.stars.forEach((s) => {
         const {x, y} = s.position;
-        this.handleStar(s.id, x, y, s.isDespawned);
+        this.starGroup.handle(s.id, x, y, s.isDespawned);
       })
 
       state.stars.onRemove = (s) => {
-        this.despawnStar(s.id);
+        this.starGroup.despawn(s.id);
+      }
+
+      state.lasers.forEach((l) => {
+        if (l.playerId !== this.playerId) {
+          this.lasers.handle(l.id, l.origin.x, l.origin.y, l.isDespawned, l.velocity.x, l.velocity.y, l.playerId);
+        }
+      })
+
+      state.lasers.onRemove = (l) => {
+        this.lasers.remove(l.id);
       }
     });
 
 
-    this.battleRoom.onMessage(SERVER_MSG.PONG, (rtt: RTT) => {
-      this.currentRTT.currentRTT = Date.now() - rtt.lastPing;
+    this.battleRoom.onMessage(SERVER_MSG.PONG, (lastPing: number) => {
+      this.currentRTT.currentRTT = Date.now() - lastPing;
+      this.currentRTT.lastPing = Date.now();
     })
   }
 
@@ -245,16 +292,19 @@ export default class GameScene extends Scene {
     // check on the server side
     this.battleRoom?.send('spawn', data);
     this.time.addEvent({
-      loop: true, delay: 5000,
+      loop: true, delay: 3000,
       callback: () => {
-        console.log("decrease hp" + this.hp);
         this.hp.amount -= 3;
-        if (this.hp.amount <= 0) {
-          this.restartScene();
-        };
       }
     })
     this.hp.amount = 100;
+  }
+
+  checkHp() {
+    if (this.hp.amount <= 0) {
+      this.hp.amount = 0;
+      this.restartScene();
+    }
   }
 
   sendMyPlayerTransform() {
@@ -280,6 +330,7 @@ export default class GameScene extends Scene {
       try {
         this.battleRoom.send('move', data);
         this.player.setData('lastMove', data);
+        this.checkStarOverlap();
       } catch (error) {
         console.error(error);
       }
@@ -296,12 +347,6 @@ export default class GameScene extends Scene {
     if (id === this.playerId) {
       this.restartScene();
     }
-  }
-
-  despawnStar(id: number) {
-    let star = this.stars.get(id);
-    star?.setX(-1000).setX(-1000).setVisible(false).setActive(false);
-    this.stars.delete(id);
   }
 
   handlePlayer(id: number, x: number, y: number, angle: number, score: number) {
@@ -322,11 +367,8 @@ export default class GameScene extends Scene {
       this.setupPlayerController();
       this.setupPlayerHUD();
       this.player.body.onOverlap = true;
-      // console.log(this.stars);
-      // this.stars?.forEach((star) => {
-      //   this.physics.add.overlap(this.player as GameObjects.GameObject, star, this.handleCollisionWithStar, undefined, this);
-      // });
-      this.physics.add.overlap(this.player as GameObjects.GameObject, this.starGroup, this.handleCollisionWithStar, undefined, this);
+      // this.physics.add.overlap(this.player as GameObjects.GameObject, this.starGroup.getGroup(), this.handleCollisionWithStar, undefined, this);
+      // this.physics.add.overlap(this.player as GameObjects.GameObject, this.lasers.getGroup(), this.handleCollisionWithLaser, undefined, this);
       this.players?.forEach((player) => {
         this.physics.add.overlap(this.player as GameObjects.GameObject, player, this.handlePlayerCollision, undefined, this);
       })
@@ -353,46 +395,12 @@ export default class GameScene extends Scene {
     player?.setData('score', score);
   }
 
-  handleStarTransform(id: number, isDespawned: boolean) {
-    const star = this.stars.get(id);
-    star?.setData('isDespawned', isDespawned);
-  }
 
-  handleStar(id: number, x: number, y: number, isDespawned: boolean) {
-    if (this.stars.has(id)) {
-      this.handleStarTransform(id, isDespawned);
+  handleCollisionWithStar(_: any, star: any) {
+    if (star.getData('isDespawned') || !star.visible) {
       return;
     }
-    if (isDespawned) {
-      return;
-    }
-    let star;
-    star = this.starGroup.getFirstDead();
-    if (!star) {
-      star = this.add.image(x, y, 'space', 'star_gold.png');
-      this.starGroup.add(star);
-      // this.physics.add.existing(star);
-      // this.player && this.physics.add.overlap(this.player as GameObjects.GameObject, star, this.handleCollisionWithStar, undefined, this)
-    } 
-    if (star) {
-      star.setX(x);
-      star.setY(y);
-      star.setVisible(true);
-      star.setActive(true);
-      star.setAlpha(1);
-      star.setOrigin(0.5);
-      star.setData('id', id);
-      star.setData('transform', {x, y});
-      star.setData('isDespawned', isDespawned);
-      this.stars.set(id, star);
-    }
-  }
-
-  handleCollisionWithStar(player: any, star: any) {
-    if (star.getData('isDespawned')) {
-      return;
-    }
-    star.setData('isDespawned', true);
+    // star.setData('isDespawned', true);
     this.battleRoom?.send('starCollected', {id: star.getData('id')});
     star.setVisible(false);
     star.x = -1000;
@@ -401,6 +409,47 @@ export default class GameScene extends Scene {
     if (this.hp.amount >= 100) {
       this.hp.amount = 100
     }
+  }
+
+  handleCollisionWithLaser(player: any, laser: any) {
+    if (laser.getData('isDespawned') || !laser.visible) {
+      return;
+    }
+    // star.setData('isDespawned', true);
+    laser.setVisible(false);
+    laser.x = -1000;
+    laser.y = -1000;
+    if (laser.getData('currentPlayer') || player) {
+      return;
+    }
+    console.log("handled")
+    this.hp.amount -= 10;
+    this.battleRoom?.send('laserHit', {id: laser.getData('id')});
+  }
+
+
+  checkStarOverlap() {
+    this.starGroup.getMap().forEach((s) => {
+      if (this.player?.getBounds().contains(s.x, s.y)) {
+        this.handleCollisionWithStar(undefined, s);
+      }
+    })
+  }
+
+  checkLaserOverlap() {
+    this.lasers.getMap().forEach((l) => {
+      if (this.player?.getBounds().contains(l.x, l.y) && !(l.getData('currentPlayer'))) {
+        this.handleCollisionWithLaser(undefined, l);
+      }
+      this.players.forEach((p) => {
+        if (p.getData('id') !== this.playerId && l.getData('playerId') !== p.getData('id')) {
+          // console.log('laser hit');
+          if (p.getBounds().contains(l.x, l.y)) {
+            this.handleCollisionWithLaser(p, l);
+          }
+        }
+      })
+    })
   }
 
   handlePlayerCollision(playerA: any, playerB: any) {
@@ -431,23 +480,12 @@ export default class GameScene extends Scene {
     });
   }
 
-  updateStarStatus() {
-    this.stars?.forEach((star) => {
-      const id = star.getData("id") as number;
-      // if (!star) return;
-      if (star.getData("isDespawned") as boolean) {
-        star.setActive(false);
-        star.setVisible(false);
-        star.setX(-1000);
-        star.setY(-1000);
-        this.stars.delete(id);
-      }
-    })
-  }
 
   pingServer() {
-    this.currentRTT.lastPing = Date.now();
-    this.battleRoom?.send(SERVER_MSG.PING, this.currentRTT);
+    this.battleRoom?.send(SERVER_MSG.PING, Date.now());
+    if (Date.now() - this.currentRTT.lastPing > 5000) {
+      this.reconnect();
+    }
   }
 
   setupPlayerController() {
@@ -462,5 +500,9 @@ export default class GameScene extends Scene {
     // use paralel scene for the HUD
     this.scene.launch('GameHUD', { player: this.player, scene: this, players: this.players, currentRTT: this.currentRTT, hp: this.hp});
     this.gameHUD = this.scene.get('GameHUD');
+  }
+
+  broadcastLaser(id: number, x: number, y: number) {
+    this.battleRoom?.send('shoot', {id: id, x: x, y: y});
   }
 }

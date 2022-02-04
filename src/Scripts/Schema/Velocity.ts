@@ -8,7 +8,7 @@
 import { Schema, type, ArraySchema, MapSchema, SetSchema, DataChange } from '@colyseus/schema';
 
 
-export class Vector2DSchema extends Schema {
+export class Velocity extends Schema {
     @type("number") public x!: number;
     @type("number") public y!: number;
 }

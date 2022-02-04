@@ -7,6 +7,7 @@
   "scripts": {
     "format": "prettier --write \"src/**/*.ts\"",
     "build": "webpack --mode=production --devtool=nosources-source-map",
+    "dev": "webpack --watch & live-server --port=8085",
     "start": "webpack --watch & live-server --port=8085",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

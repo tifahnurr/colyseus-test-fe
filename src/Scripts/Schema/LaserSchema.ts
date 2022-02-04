@@ -7,12 +7,12 @@
 
 import { Schema, type, ArraySchema, MapSchema, SetSchema, DataChange } from '@colyseus/schema';
 import { Vector2DSchema } from './Vector2DSchema'
+import { Velocity } from './Velocity'
 
-export class PlayerSchema extends Schema {
-    @type("boolean") public isSpawned!: boolean;
+export class LaserSchema extends Schema {
+    @type("boolean") public isDespawned!: boolean;
     @type("uint16") public id!: number;
-    @type("number") public angle!: number;
-    @type("number") public score!: number;
-    @type(Vector2DSchema) public position: Vector2DSchema = new Vector2DSchema();
-    @type("boolean") public isCrashed!: boolean;
+    @type("uint16") public playerId!: number;
+    @type(Vector2DSchema) public origin: Vector2DSchema = new Vector2DSchema();
+    @type(Velocity) public velocity: Velocity = new Velocity();
 }
