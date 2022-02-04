@@ -17,6 +17,8 @@ interface HP {
 
 const Movement = 10;
 
+const ServerUrl = "colyseus-test-server.herokuapp.com";
+
 export default class GameScene extends Scene {
   client!: Client;
 
@@ -62,7 +64,7 @@ export default class GameScene extends Scene {
     this.playerId = (Math.floor(Math.random() * 1e5) + Date.now()) % 65000;
 
     // setup colyseus client
-    this.client = new Client(`ws://${window.location.hostname}:2567`);
+    this.client = new Client(`ws://${ServerUrl}`);
 
     // setups world bounds
     this.cameras.main.setBounds(0, 0, this.bound, this.bound);
@@ -193,7 +195,7 @@ export default class GameScene extends Scene {
   }
 
   async reconnect() {
-    this.client = new Client(`ws://${window.location.hostname}:2567`);
+    this.client = new Client(`ws://${ServerUrl}`);
     try {
       this.client.reconnect(String(this.battleRoom?.id), String(this.battleRoom?.sessionId)).then((room) => {
         this.battleRoom = room;
