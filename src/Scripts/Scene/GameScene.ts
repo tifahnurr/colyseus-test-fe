@@ -17,8 +17,8 @@ interface HP {
 
 const Movement = 10;
 
-const ServerUrl = "colyseus-test-server.herokuapp.com";
-// const ServerUrl = "127.0.0.1:2567"
+const ServerUrl = "wss://colyseus-test-server.herokuapp.com";
+// const ServerUrl = "ws://127.0.0.1:2567"
 
 export default class GameScene extends Scene {
   client!: Client;
@@ -51,6 +51,8 @@ export default class GameScene extends Scene {
 
   hp!: HP;
 
+  isGameOver: boolean = false;
+
   constructor() {
     super('GameScene');
   }
@@ -65,7 +67,7 @@ export default class GameScene extends Scene {
     this.playerId = (Math.floor(Math.random() * 1e5) + Date.now()) % 65000;
 
     // setup colyseus client
-    this.client = new Client(`wss://${ServerUrl}`);
+    this.client = new Client(`${ServerUrl}`);
 
     // setups world bounds
     this.cameras.main.setBounds(0, 0, this.bound, this.bound);
@@ -103,47 +105,50 @@ export default class GameScene extends Scene {
   }
 
   update() {
-    this.updatePlayersPosition(0.333);
-    this.starGroup.updateStatus();
-    // player is undefined or not active
-    if (!this.player?.active) {
-      return;
+    if (!this.isGameOver) {
+      this.updatePlayersPosition(0.333);
+      this.starGroup.updateStatus();
+      // player is undefined or not active
+      if (!this.player?.active) {
+        return;
+      }
+  
+      // stop player
+      this.player.setVelocity(0);
+  
+      // move player by cursors
+      if (this.cursors.left.isDown) {
+        this.player.setAngle(-90)
+        this.player.x -= Movement;
+      } else if (this.cursors.right.isDown) {
+        this.player.setAngle(90)
+        this.player.x += Movement
+      }
+  
+      if (this.cursors.up.isDown) {
+        this.player.setAngle(0)
+        this.player.y -= Movement
+      } else if (this.cursors.down.isDown) {
+        this.player.setAngle(-180)
+        this.player.y += Movement
+      }
+  
+      if (this.spaceButton.isDown) {
+        this.lasers.spawnCurrent(this.player);
+      }
+  
+      // this.checkLaserOverlap();
+      if (this.lasers.getGroup().getFirstAlive()) {
+        this.checkLaserOverlap();
+      }
+      this.checkHp();
+      // send player transform each tick
+      this.sendMyPlayerTransform();
     }
-
-    // stop player
-    this.player.setVelocity(0);
-
-    // move player by cursors
-    if (this.cursors.left.isDown) {
-      this.player.setAngle(-90)
-      this.player.x -= Movement;
-    } else if (this.cursors.right.isDown) {
-      this.player.setAngle(90)
-      this.player.x += Movement
-    }
-
-    if (this.cursors.up.isDown) {
-      this.player.setAngle(0)
-      this.player.y -= Movement
-    } else if (this.cursors.down.isDown) {
-      this.player.setAngle(-180)
-      this.player.y += Movement
-    }
-
-    if (this.spaceButton.isDown) {
-      this.lasers.spawnCurrent(this.player);
-    }
-
-    // this.checkLaserOverlap();
-    if (this.lasers.getGroup().getFirstAlive()) {
-      this.checkLaserOverlap();
-    }
-    this.checkHp();
-    // send player transform each tick
-    this.sendMyPlayerTransform();
   }
 
   resetReferences() {
+    this.isGameOver = false;
     this.battleRoom = undefined;
     this.player = undefined;
     this.playerId = 0;
@@ -174,12 +179,14 @@ export default class GameScene extends Scene {
   }
 
   goToNextScene(scene: string, data?: object) {
-    this.battleRoom?.leave();
-    this.player?.destroy();
-    this.players = new Map();
-    this.starGroup.resetReferences();
     this.resetReferences();
     this.scene.start(scene, data);
+  }
+
+  leave() {
+    // this.battleRoom?.send("leave");
+    this.battleRoom?.leave();
+    this.player?.destroy();
   }
 
   async connect() {
@@ -200,7 +207,7 @@ export default class GameScene extends Scene {
   }
 
   async reconnect() {
-    this.client = new Client(`wss://${ServerUrl}`);
+    this.client = new Client(`${ServerUrl}`);
     try {
       this.client.reconnect(String(this.battleRoom?.id), String(this.battleRoom?.sessionId)).then((room) => {
         this.battleRoom = room;
@@ -241,10 +248,54 @@ export default class GameScene extends Scene {
     });
   }
 
+  setupRestartButton() {
+    const screenCenterX =
+      this.cameras.main.worldView.x + this.cameras.main.width / 2;
+    const screenCenterY =
+      this.cameras.main.worldView.y + this.cameras.main.height / 2;
+    const rectangle = this.add.rectangle(0, 0, 300, 150, 0x696969, 1);
+    const spawnText = this.add
+      .text(0, 0, 'Try Again', {
+        fontSize: '32px',
+        wordWrap: { width: 200 },
+        align: 'center',
+      })
+      .setOrigin(0.5);
+    const button = this.add.container(screenCenterX, screenCenterY, [
+      rectangle,
+      spawnText,
+    ]);
+    button.setDepth(1);
+    rectangle.setInteractive().on(Input.Events.POINTER_DOWN, () => {
+      if (!this.battleRoom) {
+        return;
+      }
+      button.destroy();
+      this.leave();
+      setTimeout(() => {
+        this.restartScene();
+      }, 50)
+    });
+  }
+
+  gameover() {
+    this.isGameOver = true;
+    this.cameras.main.stopFollow();
+    this.setupRestartButton();
+    this.player?.setVelocity(5, 5);
+    this.player?.setTint(0x555555);
+    // this.resetReferences();
+    this.battleRoom?.send('gameover');
+  }
+
   setupBattleRoomEvents() {
     if (!this.battleRoom) {
       return;
     }
+
+    this.battleRoom?.onStateChange.once((state) => {
+      console.log("this is the first room state!", state);
+    });
 
     // ping pong handler
     this.battleRoom.onMessage(SERVER_MSG.PING, (message) => {
@@ -306,7 +357,9 @@ export default class GameScene extends Scene {
     this.time.addEvent({
       loop: true, delay: 3000,
       callback: () => {
-        this.hp.amount -= 3;
+        if (!this.isGameOver) {
+          this.hp.amount -= 3;
+        }
       }
     })
     this.hp.amount = 100;
@@ -315,8 +368,7 @@ export default class GameScene extends Scene {
   checkHp() {
     if (this.hp.amount <= 0) {
       this.hp.amount = 0;
-      this.battleRoom?.leave();
-      this.restartScene();
+      this.gameover();
     }
   }
 
@@ -351,15 +403,16 @@ export default class GameScene extends Scene {
   }
 
   despawnPlayer(id: number) {
+    if (id === this.playerId) {
+      this.gameover();
+      return;
+    }
     const player = this.players.get(id);
     player?.setX(-1000);
     player?.setY(-1000);
     player?.setVisible(false);
     player?.destroy();
     this.players.delete(id);
-    if (id === this.playerId) {
-      this.restartScene();
-    }
   }
 
   handlePlayer(id: number, x: number, y: number, angle: number, score: number) {
@@ -466,7 +519,7 @@ export default class GameScene extends Scene {
 
   handlePlayerCollision(playerA: any, playerB: any) {
     this.battleRoom?.send('playerCollision', {id: playerB.getData('id')});
-    this.restartScene();
+    this.gameover();
   }
 
   updatePlayersPosition(percentage: number) {
