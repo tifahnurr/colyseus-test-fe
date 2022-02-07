@@ -18,6 +18,7 @@ interface HP {
 const Movement = 10;
 
 const ServerUrl = "colyseus-test-server.herokuapp.com";
+// const ServerUrl = "127.0.0.1:2567"
 
 export default class GameScene extends Scene {
   client!: Client;
@@ -146,6 +147,10 @@ export default class GameScene extends Scene {
     this.battleRoom = undefined;
     this.player = undefined;
     this.playerId = 0;
+    this.players?.forEach((p) => {
+      this.players?.delete(p.getData('id'));
+      p?.destroy();
+    })
     this.players = new Map();
     this.starGroup?.resetReferences();
     this.currentRTT = {
@@ -202,6 +207,7 @@ export default class GameScene extends Scene {
         this.starGroup.clear();
         this.lasers.clear();
         this.setupBattleRoomEvents();
+        this.sessionId = this.battleRoom.sessionId;
       })
     } catch (e) {
       console.log("cannot reconnect");
@@ -257,6 +263,10 @@ export default class GameScene extends Scene {
         p.isSpawned && this.handlePlayer(p.id, x, y, p.angle, p.score);
       });
 
+      state.players.onRemove = (p) => {
+        this.despawnPlayer(p.id);
+      }
+
       state.stars.forEach((s) => {
         const {x, y} = s.position;
         this.starGroup.handle(s.id, x, y, s.isDespawned);
@@ -305,6 +315,7 @@ export default class GameScene extends Scene {
   checkHp() {
     if (this.hp.amount <= 0) {
       this.hp.amount = 0;
+      this.battleRoom?.leave();
       this.restartScene();
     }
   }
@@ -424,7 +435,6 @@ export default class GameScene extends Scene {
     if (laser.getData('currentPlayer') || player) {
       return;
     }
-    console.log("handled")
     this.hp.amount -= 10;
     this.battleRoom?.send('laserHit', {id: laser.getData('id')});
   }

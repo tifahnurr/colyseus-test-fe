@@ -93,7 +93,6 @@ export default class Lasers {
       if (isDespawned) {
         return;
       }
-      console.log(this.lasers);
       let laser: any;
       laser = this.group.getFirstDead();
       if (!laser) {
