@@ -14,5 +14,5 @@ export class PlayerSchema extends Schema {
     @type("number") public angle!: number;
     @type("number") public score!: number;
     @type(Vector2DSchema) public position: Vector2DSchema = new Vector2DSchema();
-    @type("boolean") public isCrashed!: boolean;
+    @type("number") public hp!: number;
 }

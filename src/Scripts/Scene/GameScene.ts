@@ -17,8 +17,8 @@ interface HP {
 
 const Movement = 10;
 
-const ServerUrl = "wss://colyseus-test-server.herokuapp.com";
-// const ServerUrl = "ws://127.0.0.1:2567"
+// const ServerUrl = "wss://colyseus-test-server.herokuapp.com";
+const ServerUrl = "ws://127.0.0.1:2567"
 
 export default class GameScene extends Scene {
   client!: Client;
@@ -105,9 +105,9 @@ export default class GameScene extends Scene {
   }
 
   update() {
+    this.updatePlayersPosition(0.333);
+    this.starGroup.updateStatus();
     if (!this.isGameOver) {
-      this.updatePlayersPosition(0.333);
-      this.starGroup.updateStatus();
       // player is undefined or not active
       if (!this.player?.active) {
         return;
@@ -160,7 +160,7 @@ export default class GameScene extends Scene {
     this.starGroup?.resetReferences();
     this.currentRTT = {
       currentRTT: 0,
-      lastPing: 0
+      lastPing: Date.now()
     }
     this.hp = {
       amount: 100
@@ -202,6 +202,7 @@ export default class GameScene extends Scene {
       loop: true, delay: 3000,
       callback: () => {
         this.pingServer();
+        !this.isGameOver;
       }
     })
   }
@@ -311,7 +312,7 @@ export default class GameScene extends Scene {
     this.battleRoom.onStateChange((state: BattleSchema) => {
       state.players.forEach((p) => {
         const { x, y } = p.position;
-        p.isSpawned && this.handlePlayer(p.id, x, y, p.angle, p.score);
+        p.isSpawned && this.handlePlayer(p.id, x, y, p.angle, p.score, p.hp);
       });
 
       state.players.onRemove = (p) => {
@@ -354,14 +355,14 @@ export default class GameScene extends Scene {
 
     // check on the server side
     this.battleRoom?.send('spawn', data);
-    this.time.addEvent({
-      loop: true, delay: 3000,
-      callback: () => {
-        if (!this.isGameOver) {
-          this.hp.amount -= 3;
-        }
-      }
-    })
+    // this.time.addEvent({
+    //   loop: true, delay: 3000,
+    //   callback: () => {
+    //     if (!this.isGameOver) {
+    //       this.hp.amount -= 3;
+    //     }
+    //   }
+    // })
     this.hp.amount = 100;
   }
 
@@ -370,6 +371,10 @@ export default class GameScene extends Scene {
       this.hp.amount = 0;
       this.gameover();
     }
+  }
+
+  updateHp() {
+    this.battleRoom?.send("updateHp", {hp: this.hp.amount})
   }
 
   sendMyPlayerTransform() {
@@ -404,7 +409,7 @@ export default class GameScene extends Scene {
 
   despawnPlayer(id: number) {
     if (id === this.playerId) {
-      this.gameover();
+      !this.isGameOver && this.gameover();
       return;
     }
     const player = this.players.get(id);
@@ -415,14 +420,17 @@ export default class GameScene extends Scene {
     this.players.delete(id);
   }
 
-  handlePlayer(id: number, x: number, y: number, angle: number, score: number) {
+  handlePlayer(id: number, x: number, y: number, angle: number, score: number, hp: number) {
     if (this.players.has(id)) {
       if (id !== this.playerId) {
-        this.handlePlayerTransform(id, x, y, angle, score);
+        this.handlePlayerTransform(id, x, y, angle, score, hp);
       } else {
         this.player?.setData('score', score);
+        if (this.hp.amount !== hp) {
+          this.player?.setData('hp',  hp);
+          this.hp.amount = hp;
+        }
       }
-
       return;
     }
 
@@ -447,6 +455,7 @@ export default class GameScene extends Scene {
       player.setData('id', id);
       player.setData('transform', { x, y, angle: 0 });
       player.setData('score', score);
+      player.setData('hp', hp);
       this.physics.add.existing(player);
       if (this.player) {
         this.physics.add.overlap(this.player as GameObjects.GameObject, player, this.handlePlayerCollision, undefined, this);
@@ -455,10 +464,11 @@ export default class GameScene extends Scene {
     }
   }
 
-  handlePlayerTransform(id: number, x: number, y: number, angle: number, score: number) {
+  handlePlayerTransform(id: number, x: number, y: number, angle: number, score: number, hp: number) {
     const player = this.players.get(id);
     player?.setData('transform', { x, y, angle });
     player?.setData('score', score);
+    player?.setData('hp', hp)
   }
 
 
@@ -475,10 +485,11 @@ export default class GameScene extends Scene {
     if (this.hp.amount >= 100) {
       this.hp.amount = 100
     }
+    this.updateHp();
   }
 
   handleCollisionWithLaser(player: any, laser: any) {
-    if (laser.getData('isDespawned') || !laser.visible) {
+    if (!laser || !laser.visible) {
       return;
     }
     // star.setData('isDespawned', true);
@@ -486,10 +497,8 @@ export default class GameScene extends Scene {
     laser.x = -1000;
     laser.y = -1000;
     if (laser.getData('currentPlayer') || player) {
-      return;
+      this.battleRoom?.send('laserHit', {id: player.getData('id'), laserId: laser.getData('id')});
     }
-    this.hp.amount -= 10;
-    this.battleRoom?.send('laserHit', {id: laser.getData('id')});
   }
 
 
