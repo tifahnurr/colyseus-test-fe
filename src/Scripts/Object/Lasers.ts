@@ -4,6 +4,8 @@ import { BattleSchema } from '../Schema/BattleSchema';
 
 
 const Velocity = 1000
+
+const Color = ["Blue", "Green", "Red", "Red"]
 export default class Lasers {
 
   lasers!: Map<number, Physics.Arcade.Image>;
@@ -55,12 +57,12 @@ export default class Lasers {
       let laser:Physics.Arcade.Image = this.group.getFirstDead();
       if (!laser) {
         console.log("create new laser");
-          laser = this.scene.physics.add.image(-1000, -1000, 'space', 'laserBlue07.png');
+          laser = this.scene.physics.add.image(-1000, -1000, 'space', `laser${Color[player.getData('id') % 4]}07.png`);
           this.group.add(laser)
       }
       if (laser) {
 
-        laser.setTexture('space', 'laserBlue07.png');
+        laser.setTexture('space', `laser${Color[player.getData('id') % 4]}07.png`);
           const id = (Math.floor(Math.random() * 1e5) + Date.now()) % 65000;
           laser.setAngle(angle)
           laser.setX(player.x);
@@ -97,13 +99,13 @@ export default class Lasers {
       laser = this.group.getFirstDead();
       if (!laser) {
         console.log("create new laser")
-        laser = this.scene.physics.add.image(x, y, 'space', 'laserRed07.png');
+        laser = this.scene.physics.add.image(x, y, 'space', `laser${Color[playerId % 4]}07.png`);
         this.group.add(laser);
         // this.physics.add.existing(laser);
         // this.player && this.physics.add.overlap(this.player as GameObjects.GameObject, laser, this.handleCollisionWithlaser, undefined, this)
       } 
       if (laser) {
-        laser.setTexture('space', 'laserRed07.png');
+        laser.setTexture('space', `laser${Color[playerId % 4]}07.png`);
         laser.setX(x);
         laser.setY(y);
         laser.setVisible(true);

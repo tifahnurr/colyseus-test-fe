@@ -20,6 +20,11 @@ const Movement = 10;
 const ServerUrl = "wss://colyseus-test-server.herokuapp.com";
 // const ServerUrl = "ws://127.0.0.1:2567"
 
+const PlayerSprite = ["playerShip1_blue.png", "playerShip1_green.png", "playerShip1_orange.png", "playerShip1_red.png",
+                      "playerShip2_blue.png", "playerShip2_green.png", "playerShip2_orange.png", "playerShip2_red.png",
+                      "playerShip3_blue.png", "playerShip3_green.png", "playerShip3_orange.png", "playerShip3_red.png"
+                    ];
+
 export default class GameScene extends Scene {
   client!: Client;
 
@@ -436,7 +441,7 @@ export default class GameScene extends Scene {
 
     let player;
     if (id === this.playerId) {
-      player = this.physics.add.image(x, y, 'space', 'playerShip1_blue.png');
+      player = this.physics.add.image(x, y, 'space', PlayerSprite[id % 12]);
       this.player = player;
       this.setupPlayerController();
       this.setupPlayerHUD();
@@ -447,7 +452,7 @@ export default class GameScene extends Scene {
         this.physics.add.overlap(this.player as GameObjects.GameObject, player, this.handlePlayerCollision, undefined, this);
       })
     } else {
-      player = this.add.image(x, y, 'space', 'playerShip1_red.png');
+      player = this.add.image(x, y, 'space', PlayerSprite[id % 12]);
     }
 
     if (player) {

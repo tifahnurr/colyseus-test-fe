@@ -9,6 +9,10 @@ interface HP {
   amount: number;
 }
 
+const ColorString = ["Blue", "Green", "Yellow", "Red"];
+const ColorCode = [0xadd8e6, 0x62bd69, 0xffe800, 0xc58080]
+const ColorCodeString = ["#add8e6", "#62bd69", "#ff9d5c", "#c58080"]
+
 export default class GameHUD extends Scene {
   constructor() {
     super('GameHUD');
@@ -64,8 +68,8 @@ export default class GameHUD extends Scene {
           font: "16px Arial"
         }))
     }
-    const hpBg = this.add.image(0, 0, 'space', 'buttonBlue.png').setData('name', 'bg');
-    const hpPercent = this.add.rectangle(0, 0, hpBg.width, hpBg.height - 5, 0xadd8e6).setData('name', 'percent').setData('maxWidth', hpBg.width);
+    const hpBg = this.add.image(0, 0, 'space', `button${ColorString[this.player?.getData('id') % 4]}.png`).setData('name', 'bg');
+    const hpPercent = this.add.rectangle(0, 0, hpBg.width, hpBg.height - 5, ColorCode[this.player?.getData('id') % 4]).setData('name', 'percent').setData('maxWidth', hpBg.width);
     const hpText = this.add.text(0, 0, '100%', {font: "16px Arial", color: "#000000", align: "center"}).setOrigin(0.5, 0.5).setData('name', 'text');
     this.healthPoint = this.add.container(screenCenterX, 750, [hpBg, hpPercent, hpText]);
     this.lastUpdate = 0;
@@ -103,17 +107,17 @@ export default class GameHUD extends Scene {
   }
 
   updatePlayerRanking() {
-    let scores: Array<number> = [];
+    let scores: Array<{id: number, score:number}> = [];
     this.players?.forEach((player) => {
-      scores.push(player.getData('score'));
+      scores.push({id: player.getData('id'), score: player.getData('score')});
     });
-    scores.sort((a, b) => {return (a < b ? 1 : a === b ? 0 : -1);});
+    scores.sort((a, b) => {return (a.score < b.score ? 1 : a.score === b.score ? 0 : -1);});
     let isCurrentPlayerInRanking = false;
     for (let i = 0; i < 10; i++) {
-      this.playerRanking[i].setColor("#ffffff");
-      this.playerRanking[i].setText(`${i + 1}. ${scores[i] ? scores[i] : 0}`);
-      if (scores[i] === this.player?.getData('score') && !isCurrentPlayerInRanking) {
-        this.playerRanking[i].setColor('#add8e6');
+      this.playerRanking[i].setColor(scores[i] ? ColorCodeString[scores[i].id % 4] : "#ffffff");
+      this.playerRanking[i].setText(`${i + 1}. ${scores[i] ? scores[i].score : 0}`);
+      if (scores[i] && scores[i].id === this.player?.getData('id') && !isCurrentPlayerInRanking) {
+        this.playerRanking[i].text += " < YOU";
         isCurrentPlayerInRanking = true;
       }
     }
