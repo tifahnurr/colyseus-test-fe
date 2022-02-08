@@ -17,8 +17,8 @@ interface HP {
 
 const Movement = 10;
 
-// const ServerUrl = "wss://colyseus-test-server.herokuapp.com";
-const ServerUrl = "ws://127.0.0.1:2567"
+const ServerUrl = "wss://colyseus-test-server.herokuapp.com";
+// const ServerUrl = "ws://127.0.0.1:2567"
 
 export default class GameScene extends Scene {
   client!: Client;
