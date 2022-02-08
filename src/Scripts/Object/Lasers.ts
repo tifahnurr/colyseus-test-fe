@@ -171,6 +171,7 @@ export default class Lasers {
 
   remove(id: number) {
     const laser = this.lasers.get(id);
+    this.despawn(laser);
     laser?.setActive(false);
     this.lasers.delete(id);
   }
