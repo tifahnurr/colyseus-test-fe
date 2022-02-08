@@ -486,11 +486,11 @@ export default class GameScene extends Scene {
     star.setVisible(false);
     star.x = -1000;
     star.y = -1000;
-    this.hp.amount += 5;
-    if (this.hp.amount >= 100) {
-      this.hp.amount = 100
-    }
-    this.updateHp();
+    // this.hp.amount += 5;
+    // if (this.hp.amount >= 100) {
+    //   this.hp.amount = 100
+    // }
+    // this.updateHp();
   }
 
   handleCollisionWithLaser(player: any, laser: any) {
