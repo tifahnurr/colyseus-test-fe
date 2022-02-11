@@ -18,7 +18,7 @@ interface HP {
 const Movement = 10;
 
 const ServerUrl = "wss://colyseus-test-server.herokuapp.com";
-// const ServerUrl = "ws://127.0.0.1:2567"
+// const ServerUrl = `ws://${window.location.hostname}:2567`
 
 const PlayerSprite = ["playerShip1_blue.png", "playerShip1_green.png", "playerShip1_orange.png", "playerShip1_red.png",
                       "playerShip2_blue.png", "playerShip2_green.png", "playerShip2_orange.png", "playerShip2_red.png",
@@ -175,8 +175,14 @@ export default class GameScene extends Scene {
   }
 
   setupRestartEvent() {
-    this.input.keyboard.removeListener('keup-R', this.restartScene, this);
-    this.input.keyboard.once('keyup-R', this.restartScene, this);
+    this.input.keyboard.removeListener('keup-R', this.onRestart, this);
+    this.input.keyboard.once('keyup-R', this.onRestart, this);
+  }
+
+  onRestart() {
+    this.battleRoom?.send('gameover');
+    this.battleRoom?.leave();
+    this.restartScene();
   }
 
   restartScene() {
